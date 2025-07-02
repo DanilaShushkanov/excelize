@@ -643,28 +643,30 @@ func (f *File) RemoveRow(sheet string, row int) error {
 		return err
 	}
 	ws.formulaSI.Clear()
-	if row > len(ws.SheetData.Row) {
-		return f.adjustHelper(sheet, rows, row, -1)
-	}
-	for rowIdx := range ws.SheetData.Row {
-		v := &ws.SheetData.Row[rowIdx]
-		if v.R == row {
-			for _, c := range v.C {
+
+	found := false
+	writeIdx := 0
+
+	for readIdx := 0; readIdx < len(ws.SheetData.Row); readIdx++ {
+		r := &ws.SheetData.Row[readIdx]
+		if r.R == row {
+			for _, c := range r.C {
 				if err := f.removeFormula(&c, ws, sheet); err != nil {
 					return err
 				}
 			}
+			found = true
+			continue
 		}
+		ws.SheetData.Row[writeIdx] = *r
+		writeIdx++
 	}
-	keep := 0
-	for rowIdx := range ws.SheetData.Row {
-		v := &ws.SheetData.Row[rowIdx]
-		if v.R != row {
-			ws.SheetData.Row[keep] = *v
-			keep++
-		}
+
+	if !found && row > len(ws.SheetData.Row) {
+		return f.adjustHelper(sheet, rows, row, -1)
 	}
-	ws.SheetData.Row = ws.SheetData.Row[:keep]
+
+	ws.SheetData.Row = ws.SheetData.Row[:writeIdx]
 	return f.adjustHelper(sheet, rows, row, -1)
 }
 
