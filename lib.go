@@ -185,22 +185,24 @@ func SplitCellName(cell string) (string, int, error) {
 
 // JoinCellName joins cell name from column name and row number.
 func JoinCellName(col string, row int) (string, error) {
-	normCol := strings.Map(func(rune rune) rune {
-		switch {
-		case 'A' <= rune && rune <= 'Z':
-			return rune
-		case 'a' <= rune && rune <= 'z':
-			return rune - 32
-		}
-		return -1
-	}, col)
-	if len(col) == 0 || len(col) != len(normCol) {
+	if len(col) == 0 {
 		return "", newInvalidColumnNameError(col)
+	}
+	var normCol []rune
+	for _, r := range col {
+		switch {
+		case 'A' <= r && r <= 'Z':
+			normCol = append(normCol, r)
+		case 'a' <= r && r <= 'z':
+			normCol = append(normCol, r-32) // upper-case
+		default:
+			return "", newInvalidColumnNameError(col)
+		}
 	}
 	if row < 1 {
 		return "", newInvalidRowNumberError(row)
 	}
-	return normCol + strconv.Itoa(row), nil
+	return string(normCol) + strconv.Itoa(row), nil
 }
 
 // ColumnNameToNumber provides a function to convert Excel sheet column name
