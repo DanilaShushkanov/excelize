@@ -415,49 +415,55 @@ func (f *File) adjustFormulaOperand(sheet, sheetN string, keepRelative bool, tok
 
 // adjustFormulaRef returns adjusted formula by giving adjusting direction and
 // the base number of column or row, and offset.
-func (f *File) adjustFormulaRef(sheet, sheetN, formula string, keepRelative bool, dir adjustDirection, num, offset int) (string, error) {
-	var (
-		val          string
-		definedNames []string
-		ps           = efp.ExcelParser()
-	)
-	for _, definedName := range f.GetDefinedName() {
-		if definedName.Scope == "Workbook" || definedName.Scope == sheet {
-			definedNames = append(definedNames, definedName.Name)
+func (f *File) adjustFormulaRef(
+	sheet, sheetN, formula string,
+	keepRelative bool,
+	dir adjustDirection,
+	num, offset int,
+) (string, error) {
+
+	definedNames := make(map[string]struct{})
+	for _, dn := range f.GetDefinedName() {
+		if dn.Scope == "Workbook" || dn.Scope == sheet {
+			definedNames[dn.Name] = struct{}{}
 		}
 	}
-	for _, token := range ps.Parse(formula) {
-		if token.TType == efp.TokenTypeUnknown {
-			val = formula
-			break
-		}
-		if token.TType == efp.TokenTypeOperand && token.TSubType == efp.TokenSubTypeRange {
-			if inStrSlice(definedNames, token.TValue, true) != -1 {
-				val += token.TValue
+
+	ps := efp.ExcelParser()
+	var b strings.Builder
+
+	tokens := ps.Parse(formula)
+	for _, token := range tokens {
+		switch {
+		case token.TType == efp.TokenTypeUnknown:
+			return formula, nil
+		case token.TType == efp.TokenTypeOperand && token.TSubType == efp.TokenSubTypeRange:
+			if _, ok := definedNames[token.TValue]; ok {
+				b.WriteString(token.TValue)
 				continue
 			}
 			if strings.ContainsAny(token.TValue, "[]") {
-				val += token.TValue
+				b.WriteString(token.TValue)
 				continue
 			}
 			operand, err := f.adjustFormulaOperand(sheet, sheetN, keepRelative, token, dir, num, offset)
 			if err != nil {
-				return val, err
+				return b.String(), err
 			}
-			val += operand
-			continue
+			b.WriteString(operand)
+		case token.TType == efp.TokenTypeOperand && token.TSubType == efp.TokenSubTypeText:
+			b.WriteRune(efp.QuoteDouble)
+			b.WriteString(strings.ReplaceAll(token.TValue, `"`, `""`))
+			b.WriteRune(efp.QuoteDouble)
+		default:
+			if paren := transformParenthesesToken(token); paren != "" {
+				b.WriteString(paren)
+			} else {
+				b.WriteString(token.TValue)
+			}
 		}
-		if paren := transformParenthesesToken(token); paren != "" {
-			val += transformParenthesesToken(token)
-			continue
-		}
-		if token.TType == efp.TokenTypeOperand && token.TSubType == efp.TokenSubTypeText {
-			val += string(efp.QuoteDouble) + strings.ReplaceAll(token.TValue, "\"", "\"\"") + string(efp.QuoteDouble)
-			continue
-		}
-		val += token.TValue
 	}
-	return val, nil
+	return b.String(), nil
 }
 
 // transformParenthesesToken returns formula part with parentheses by given
