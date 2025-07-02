@@ -158,28 +158,40 @@ func readFile(file *zip.File) ([]byte, error) {
 //
 //	excelize.SplitCellName("AK74") // return "AK", 74, nil
 func SplitCellName(cell string) (string, int, error) {
-	if cell == "" {
+	if len(cell) == 0 {
 		return "", -1, newInvalidCellNameError(cell)
 	}
-	var i int
-	for i = 0; i < len(cell); i++ {
-		if '0' <= cell[i] && cell[i] <= '9' {
+
+	i := 0
+	n := len(cell)
+	for i < n {
+		c := cell[i]
+		if c >= '0' && c <= '9' {
 			break
 		}
-		if !('A' <= cell[i] && cell[i] <= 'Z') &&
-			!('a' <= cell[i] && cell[i] <= 'z') &&
-			cell[i] != '$' {
+		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '$') {
 			return "", -1, newInvalidCellNameError(cell)
 		}
+		i++
 	}
-	if i == 0 || i == len(cell) {
+
+	if i == 0 || i == n {
 		return "", -1, newInvalidCellNameError(cell)
 	}
-	col := strings.ReplaceAll(cell[:i], "$", "")
+
+	colBytes := make([]byte, 0, i)
+	for k := 0; k < i; k++ {
+		if cell[k] != '$' {
+			colBytes = append(colBytes, cell[k])
+		}
+	}
+	col := string(colBytes)
+
 	row, err := strconv.Atoi(cell[i:])
 	if err != nil || row <= 0 {
 		return "", -1, newInvalidCellNameError(cell)
 	}
+
 	return col, row, nil
 }
 
